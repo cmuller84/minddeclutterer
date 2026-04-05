@@ -9,28 +9,54 @@ interface BrainDumpProps {
 
 export default function BrainDump({ onAdd }: BrainDumpProps) {
   const [text, setText] = useState("");
-  const [selectedPriority, setSelectedPriority] = useState<Priority>("soon");
+  const [parsing, setParsing] = useState(false);
+  const [error, setError] = useState("");
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const priorities: { value: Priority; label: string; shortLabel: string }[] = [
-    { value: "now", label: "Needs done now", shortLabel: "Now" },
-    { value: "soon", label: "Needs done soon", shortLabel: "Soon" },
-    { value: "later", label: "Eventually", shortLabel: "Later" },
-    { value: "thought", label: "Just a thought", shortLabel: "Thought" },
-  ];
+  const handleSmartDump = async () => {
+    const trimmed = text.trim();
+    if (!trimmed || parsing) return;
 
-  const handleSubmit = () => {
+    setParsing(true);
+    setError("");
+
+    try {
+      const res = await fetch("/api/parse", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: trimmed }),
+      });
+
+      if (!res.ok) {
+        throw new Error("Failed to parse");
+      }
+
+      const data = await res.json();
+
+      for (const task of data.tasks) {
+        onAdd(task.text, task.priority);
+      }
+
+      setText("");
+      textareaRef.current?.focus();
+    } catch {
+      setError("Couldn't parse that. Try again or use quick add.");
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleQuickAdd = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
-    // Support multi-line: each line becomes a separate task
     const lines = trimmed
       .split("\n")
       .map((l) => l.trim())
       .filter((l) => l.length > 0);
 
     for (const line of lines) {
-      onAdd(line, selectedPriority);
+      onAdd(line, "soon");
     }
 
     setText("");
@@ -38,9 +64,9 @@ export default function BrainDump({ onAdd }: BrainDumpProps) {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Shift+Enter for newlines, Enter alone does nothing (use buttons)
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSubmit();
     }
   };
 
@@ -49,45 +75,46 @@ export default function BrainDump({ onAdd }: BrainDumpProps) {
       <textarea
         ref={textareaRef}
         value={text}
-        onChange={(e) => setText(e.target.value)}
+        onChange={(e) => {
+          setText(e.target.value);
+          setError("");
+        }}
         onKeyDown={handleKeyDown}
-        placeholder="What's on your mind? Type it all out...&#10;(One thing per line, or just free-write)"
-        rows={3}
-        className="w-full resize-none bg-transparent text-foreground placeholder:text-muted outline-none text-base leading-relaxed"
+        placeholder={"Dump everything on your mind here...\nThe messier the better. We'll sort it out."}
+        rows={4}
+        disabled={parsing}
+        className="w-full resize-none bg-transparent text-foreground placeholder:text-muted outline-none text-base leading-relaxed disabled:opacity-50"
         autoFocus
       />
 
-      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border">
-        {/* Priority selector */}
-        <div className="flex gap-1.5">
-          {priorities.map((p) => (
-            <button
-              key={p.value}
-              onClick={() => setSelectedPriority(p.value)}
-              className={`px-2.5 py-1 rounded-full text-xs font-medium transition-all ${
-                selectedPriority === p.value
-                  ? p.value === "now"
-                    ? "bg-red-100 text-red-700 ring-1 ring-red-300"
-                    : p.value === "soon"
-                      ? "bg-amber-100 text-amber-700 ring-1 ring-amber-300"
-                      : p.value === "later"
-                        ? "bg-blue-100 text-blue-700 ring-1 ring-blue-300"
-                        : "bg-purple-100 text-purple-700 ring-1 ring-purple-300"
-                  : "bg-gray-100 text-gray-500"
-              }`}
-            >
-              {p.shortLabel}
-            </button>
-          ))}
-        </div>
+      {error && (
+        <p className="text-red-500 text-xs mt-1">{error}</p>
+      )}
 
-        {/* Send button */}
+      <div className="flex items-center justify-between mt-3 pt-3 border-t border-border gap-2">
+        {/* Quick add - no AI, just adds as "soon" */}
         <button
-          onClick={handleSubmit}
-          disabled={!text.trim()}
-          className="bg-accent text-white px-4 py-1.5 rounded-full text-sm font-medium disabled:opacity-30 transition-all active:scale-95"
+          onClick={handleQuickAdd}
+          disabled={!text.trim() || parsing}
+          className="text-muted hover:text-foreground text-xs font-medium transition-all disabled:opacity-30"
         >
-          Add
+          Quick add
+        </button>
+
+        {/* Smart dump - AI parses and categorizes */}
+        <button
+          onClick={handleSmartDump}
+          disabled={!text.trim() || parsing}
+          className="bg-accent text-white px-5 py-2 rounded-full text-sm font-medium disabled:opacity-30 transition-all active:scale-95 flex items-center gap-2"
+        >
+          {parsing ? (
+            <>
+              <span className="inline-block w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+              Sorting...
+            </>
+          ) : (
+            "Dump it"
+          )}
         </button>
       </div>
     </div>

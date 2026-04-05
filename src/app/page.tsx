@@ -78,7 +78,7 @@ export default function Home() {
       <header className="px-4 pt-6 pb-2">
         <h1 className="text-2xl font-bold tracking-tight">Mind Declutterer</h1>
         <p className="text-muted text-sm mt-0.5">
-          Get it out of your head. We&apos;ll organize it.
+          Dump it all. We&apos;ll sort it out.
         </p>
       </header>
 
