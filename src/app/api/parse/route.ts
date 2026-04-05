@@ -63,7 +63,18 @@ ${text}`,
 
     return NextResponse.json({ tasks });
   } catch (error) {
-    console.error("Parse error:", error);
+    const message =
+      error instanceof Error ? error.message : "Unknown error";
+    console.error("Parse error:", message);
+
+    // Surface helpful error for missing API key
+    if (message.includes("API key") || message.includes("auth")) {
+      return NextResponse.json(
+        { error: "API key not configured. Add ANTHROPIC_API_KEY in Vercel environment variables." },
+        { status: 401 }
+      );
+    }
+
     return NextResponse.json(
       { error: "Failed to parse brain dump" },
       { status: 500 }

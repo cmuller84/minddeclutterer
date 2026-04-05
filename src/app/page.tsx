@@ -121,16 +121,17 @@ export default function Home() {
             Done ({doneCount})
           </button>
 
-          {doneCount > 0 && (
-            <button
-              onClick={() =>
-                setTasks((prev) => prev.filter((t) => !t.completed))
+          <button
+            onClick={() => {
+              if (window.confirm("Clear all tasks?")) {
+                setTasks([]);
+                setFilter("all");
               }
-              className="ml-auto text-xs text-muted hover:text-danger transition-colors"
-            >
-              Clear done
-            </button>
-          )}
+            }}
+            className="ml-auto text-xs text-muted hover:text-danger transition-colors"
+          >
+            Clear all
+          </button>
         </div>
       )}
 

@@ -27,11 +27,11 @@ export default function BrainDump({ onAdd }: BrainDumpProps) {
         body: JSON.stringify({ text: trimmed }),
       });
 
-      if (!res.ok) {
-        throw new Error("Failed to parse");
-      }
-
       const data = await res.json();
+
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to parse");
+      }
 
       for (const task of data.tasks) {
         onAdd(task.text, task.priority);
@@ -39,8 +39,8 @@ export default function BrainDump({ onAdd }: BrainDumpProps) {
 
       setText("");
       textareaRef.current?.focus();
-    } catch {
-      setError("Couldn't parse that. Try again or use quick add.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Couldn't parse that. Try again or use quick add.");
     } finally {
       setParsing(false);
     }
@@ -52,7 +52,7 @@ export default function BrainDump({ onAdd }: BrainDumpProps) {
 
     const lines = trimmed
       .split("\n")
-      .map((l) => l.trim())
+      .map((l) => l.trim().replace(/^[-*•]\s*/, ""))
       .filter((l) => l.length > 0);
 
     for (const line of lines) {
