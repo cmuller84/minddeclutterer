@@ -3,13 +3,17 @@
 import { useState, useEffect, useCallback } from "react";
 import BrainDump from "@/components/BrainDump";
 import TaskList from "@/components/TaskList";
-import { Task, Priority } from "@/lib/types";
+import { Task, Category, NewTask } from "@/lib/types";
 import { loadTasks, saveTasks, generateId } from "@/lib/storage";
+
+// Next rank after every active A task, so new A's queue behind existing ones
+function nextRank(tasks: Task[]) {
+  return Math.max(0, ...tasks.filter((t) => t.category === "A" && !t.completed).map((t) => t.rank ?? 0)) + 1;
+}
 
 export default function Home() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [loaded, setLoaded] = useState(false);
-  const [filter, setFilter] = useState<"all" | "active" | "done">("all");
 
   // Load tasks from localStorage on mount
   useEffect(() => {
@@ -24,15 +28,21 @@ export default function Home() {
     }
   }, [tasks, loaded]);
 
-  const addTask = useCallback((text: string, priority: Priority) => {
-    const newTask: Task = {
-      id: generateId(),
-      text,
-      priority,
-      completed: false,
-      createdAt: new Date().toISOString(),
-    };
-    setTasks((prev) => [newTask, ...prev]);
+  const addTasks = useCallback((incoming: NewTask[]) => {
+    setTasks((prev) => {
+      const base = nextRank(prev);
+      const now = new Date().toISOString();
+      const created: Task[] = incoming.map((t) => ({
+        id: generateId(),
+        text: t.text,
+        category: t.category,
+        rank: t.category === "A" ? base + (t.rank ?? 0) : undefined,
+        delegateTo: t.delegateTo,
+        completed: false,
+        createdAt: now,
+      }));
+      return [...created, ...prev];
+    });
   }, []);
 
   const toggleTask = useCallback((id: string) => {
@@ -53,15 +63,17 @@ export default function Home() {
     setTasks((prev) => prev.filter((t) => t.id !== id));
   }, []);
 
-  const filteredTasks =
-    filter === "all"
-      ? tasks
-      : filter === "active"
-        ? tasks.filter((t) => !t.completed)
-        : tasks.filter((t) => t.completed);
+  const recategorize = useCallback((id: string, category: Category) => {
+    setTasks((prev) =>
+      prev.map((t) =>
+        t.id === id && t.category !== category
+          ? { ...t, category, rank: category === "A" ? nextRank(prev) : undefined }
+          : t
+      )
+    );
+  }, []);
 
   const activeCount = tasks.filter((t) => !t.completed).length;
-  const doneCount = tasks.filter((t) => t.completed).length;
 
   // Don't render until loaded from localStorage to avoid hydration mismatch
   if (!loaded) {
@@ -82,50 +94,20 @@ export default function Home() {
         </p>
       </header>
 
-      {/* Brain dump input - always visible at top */}
-      <div className="px-4 py-3 sticky top-0 z-10 bg-background">
-        <BrainDump onAdd={addTask} />
+      {/* Brain dump input */}
+      <div className="px-4 py-3">
+        <BrainDump onAdd={addTasks} />
       </div>
 
-      {/* Filter tabs */}
       {tasks.length > 0 && (
-        <div className="px-4 flex gap-1 mb-2">
-          <button
-            onClick={() => setFilter("all")}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-              filter === "all"
-                ? "bg-foreground text-background"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            All ({tasks.length})
-          </button>
-          <button
-            onClick={() => setFilter("active")}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-              filter === "active"
-                ? "bg-foreground text-background"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            Active ({activeCount})
-          </button>
-          <button
-            onClick={() => setFilter("done")}
-            className={`px-3 py-1 rounded-full text-xs font-medium transition-all ${
-              filter === "done"
-                ? "bg-foreground text-background"
-                : "text-muted hover:text-foreground"
-            }`}
-          >
-            Done ({doneCount})
-          </button>
-
+        <div className="px-4 flex items-center mb-3">
+          <span className="text-xs text-muted">
+            {activeCount} on your plate
+          </span>
           <button
             onClick={() => {
               if (window.confirm("Clear all tasks?")) {
                 setTasks([]);
-                setFilter("all");
               }
             }}
             className="ml-auto text-xs text-muted hover:text-danger transition-colors"
@@ -138,9 +120,10 @@ export default function Home() {
       {/* Task list */}
       <main className="px-4 pb-8 flex-1 safe-bottom">
         <TaskList
-          tasks={filteredTasks}
+          tasks={tasks}
           onToggle={toggleTask}
           onDelete={deleteTask}
+          onRecategorize={recategorize}
         />
       </main>
     </div>
